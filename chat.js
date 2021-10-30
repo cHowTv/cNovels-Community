@@ -3,7 +3,7 @@ const path = require('path')
 const socketio = require('socket.io');
 const http = require('http');
 const formatMessage = require('.\\utils\\messages');
-//const formatMessage = require('utils\\users');
+var socketioJwt = require('socketio-jwt');
 const { userJoin, getCurrentUser,userLeave, getRoomUsers } = require('.\\utils\\users');
 const redis = require('redis');
 
@@ -21,7 +21,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 bot = 'cNovels'
 
-
+io.adapter(redis({ 
+  host: '172.26.255.129', 
+  port: 6379
+ }));
 const redis_client = redis.createClient({
   host: '172.26.255.129',
   port: 6379,
@@ -29,21 +32,57 @@ const redis_client = redis.createClient({
 });
 
 redis_client.on('error', err => {
-  console.log('Error ' + err);
+console.log('Error ' + err);
 });
+
 redis_client.on("message", function (channel, message) {
   console.log("Message: " + message +   "on channel:" + channel + "is arrive!" );
  });
  
+
+
+
+redis_client.on("subscribe", function(channel, count) {
+	console.log("Subscribed to " + channel + ". Now subscribed to " + count + " channel(s).");
+});
+
+
+
+
+
+
+
+
+
 redis_client.subscribe("notification");
 
 
-io.on('connection', socket =>{
-  
+io.on('connection', socketioJwt.authorize({
 
+  secret: myEnv.JWT_SECRET,
+
+  timeout: 15000
+
+}));
+
+
+io.onAny((event, ...args) => {
+  console.log(event, args);
+});
+
+io.on('authenticated', socket =>{
+
+  //const sessionID = socket.handshake.auth.sessionID;
+
+  console.log(socket.decoded_token.email);
+  
+  //user  that joins room from redis
+  redis_client.on()
+  
   
   socket.on('joinRoom', ({username, room}) => {
 
+    
     const user  =  userJoin(socket.id, username, room)
 
     socket.join(user.room);
@@ -65,7 +104,12 @@ io.on('connection', socket =>{
 
   } );
 
-  
+socket.on("private message", ({ content, to }) => {
+    socket.to(to).emit("private message", {
+      content,
+      from: socket.id,
+    });
+  });
  
 
 //listen for chat message
